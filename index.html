@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tram Nightmare: Dark Descent</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nosifer&family=Roboto+Mono:wght@400;700&display=swap');
+
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Roboto Mono', monospace; touch-action: none; user-select: none; }
+        
+        /* Виньетка и атмосфера */
+        #vignette {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0) 40%, rgba(0,0,0,0.8) 90%);
+            pointer-events: none; z-index: 5;
+            transition: background 2s ease-in-out;
+        }
+        #vignette.darkness {
+            background: radial-gradient(circle, rgba(50,0,0,0.1) 10%, rgba(0,0,0,1) 90%);
+        }
+        #blood-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 60%, darkred 100%);
+            opacity: 0; pointer-events: none; z-index: 6; transition: opacity 0.5s;
+        }
+
+        /* UI СЛОИ */
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 10; }
+        .active { display: flex; }
+
+        /* МЕНЮ */
+        #start-screen { 
+            /* Используем загруженное изображение */
+            background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.9)), url('1770070749918.jpg') center/cover no-repeat;
+            color: #d1d1d1;
+        }
+
+        h1 { font-family: 'Nosifer', cursive; font-size: 40px; color: #cc0000; margin: 0 0 20px 0; text-shadow: 0 0 15px #000; text-align: center; letter-spacing: 2px; }
+        
+        .menu-btn {
+            padding: 15px 60px; font-size: 22px; font-family: 'Nosifer', cursive;
+            color: #fff; background: rgba(30, 0, 0, 0.8); border: 2px solid #660000;
+            cursor: pointer; transition: 0.3s; box-shadow: 0 0 15px rgba(255, 0, 0, 0.2);
+            text-transform: uppercase; text-align: center; margin-bottom: 15px;
+            backdrop-filter: blur(4px);
+        }
+        .menu-btn:hover { background: #550000; transform: scale(1.05); }
+
+        /* Выбор цвета */
+        .color-picker { display: flex; gap: 10px; margin-bottom: 30px; }
+        .color-opt { width: 40px; height: 40px; border-radius: 50%; border: 3px solid #333; cursor: pointer; transition: transform 0.2s; box-shadow: 0 0 10px #000; }
+        .color-opt:hover, .color-opt.selected { transform: scale(1.2); border-color: #fff; }
+
+        .warning-text { position: absolute; bottom: 30px; font-size: 12px; color: #aaa; text-align: center; width: 90%; text-shadow: 1px 1px 2px #000; }
+
+        /* ИГРА */
+        #game-ui { pointer-events: none; justify-content: flex-start; align-items: flex-start; padding: 0; width: 100%; height: 100%; }
+        
+        #dist-box {
+            font-size: 24px; color: #fff; font-weight: bold; text-shadow: 2px 2px 0 #000;
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 20;
+            font-family: 'Nosifer';
+        }
+        #level-box {
+            font-size: 16px; color: #ff4444; position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); z-index: 20;
+        }
+
+        #boss-warning {
+            position: absolute; top: 15%; width: 100%; text-align: center;
+            color: #ff0000; font-family: 'Nosifer', cursive; font-size: 50px; display: none;
+            animation: pulse 0.2s infinite alternate; text-shadow: 0 0 30px red; z-index: 15;
+        }
+        @keyframes pulse { from { opacity: 0.5; transform: scale(0.95); } to { opacity: 1; transform: scale(1.05); } }
+
+        /* КНОПКИ HUD */
+        .hud-btn {
+            pointer-events: auto; position: absolute; width: 50px; height: 50px;
+            background: rgba(50, 0, 0, 0.6); border: 2px solid #880000; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            color: white; font-size: 14px; cursor: pointer; z-index: 30; font-family: 'Roboto Mono'; font-weight: bold;
+        }
+        #pause-btn { top: 20px; right: 20px; font-size: 20px; }
+        #cam-btn { top: 80px; right: 20px; font-size: 12px; }
+
+        /* ПАУЗА И ЭКРАНЫ */
+        #pause-screen { background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); z-index: 40; }
+        #countdown-screen { background: rgba(0,0,0,0.3); z-index: 50; }
+        #countdown-text { font-family: 'Nosifer'; font-size: 120px; color: #cc0000; text-shadow: 0 0 30px #ff0000; }
+
+        #game-over { background: rgba(20, 0, 0, 0.95); z-index: 60; }
+    </style>
+</head>
+<body>
+    
+    <div id="vignette"></div>
+    <div id="blood-overlay"></div>
+
+    <audio id="bg-music" loop>
+        <source src="Sateliti_-_Crna_dvojka_(SkySound.cc).mp3" type="audio/mpeg">
+    </audio>
+    <video id="boss-video" playsinline loop style="display:none" crossorigin="anonymous" muted>
+        <source src="1000018921.mp4" type="video/mp4">
+    </video>
+
+    <div id="start-screen" class="screen active">
+        <h1>СЕЛО МОЛОЧНОЕ</h1>
+        
+        <p style="margin-bottom: 10px; color: #aaa;">ВЫБЕРИ ЦВЕТ ТРАМВАЯ:</p>
+        <div class="color-picker">
+            <div class="color-opt selected" style="background: #FFCE00;" onclick="selectColor(0xFFCE00, this)"></div> <div class="color-opt" style="background: #CC0000;" onclick="selectColor(0xCC0000, this)"></div> <div class="color-opt" style="background: #2E8B57;" onclick="selectColor(0x2E8B57, this)"></div> <div class="color-opt" style="background: #4682B4;" onclick="selectColor(0x4682B4, this)"></div> <div class="color-opt" style="background: #333333;" onclick="selectColor(0x333333, this)"></div> </div>
+
+        <div class="menu-btn" onclick="startGame()">НАЧАТЬ ПУТЬ</div>
+        <div class="warning-text">СВАЙП ДЛЯ ПОВОРОТА | 'CAM' ДЛЯ ВИДА ИЗ САЛОНА</div>
+    </div>
+
+    <div id="game-ui" class="screen" style="display: none;">
+        <div id="dist-box">0 m</div>
+        <div id="level-box">УРОВЕНЬ СТРАХА: I</div>
+        <div id="boss-warning">БОСС!</div>
+        <div id="pause-btn" class="hud-btn" onclick="togglePause()">II</div>
+        <div id="cam-btn" class="hud-btn" onclick="toggleCamera()">CAM</div>
+    </div>
+
+    <div id="pause-screen" class="screen">
+        <h1 style="color: #fff;">ПАУЗА</h1>
+        <div class="menu-btn" onclick="resumeGame()">ПРОДОЛЖИТЬ</div>
+        <div class="menu-btn" style="font-size: 18px; background: #333;" onclick="toMenu()">В МЕНЮ</div>
+    </div>
+
+    <div id="countdown-screen" class="screen">
+        <div id="countdown-text">3</div>
+    </div>
+
+    <div id="game-over" class="screen">
+        <h1 style="color: darkred; font-size: 50px;">МЕРТВ</h1>
+        <p id="final-score" style="font-size: 24px; color: #fff; margin-bottom: 30px; font-family: 'Nosifer'">0 m</p>
+        <div class="menu-btn" onclick="resetGame()">ЗАНОВО</div>
+        <div class="menu-btn" style="font-size: 18px; padding: 15px 40px; background: #333;" onclick="toMenu()">ВЫХОД</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+/** --- НАСТРОЙКИ --- **/
+const BASE_CONFIG = {
+    LANES: [-3.5, 0, 3.5], 
+    SPEED: 0.35,            
+    BOSS_MILESTONE: 1000,     
+    RED_RAIL_TRIGGER: 200,    
+    FOG_DENSITY: 0.015,
+    SPAWN_DELAY: 1200        
+};
+
+let state = {
+    screen: 'MENU', 
+    lane: 1,
+    distance: 0,
+    difficultyMultiplier: 1.0,
+    isPaused: false,
+    bossActive: false,
+    extraLane: false,
+    extraLaneSide: 1,
+    animationId: null,
+    cameraMode: 'TPS',
+    tramColor: 0xFFCE00
+};
+
+const music = document.getElementById('bg-music');
+const vignette = document.getElementById('vignette');
+
+/** --- СЦЕНА --- **/
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050505);
+scene.fog = new THREE.FogExp2(0x050505, BASE_CONFIG.FOG_DENSITY);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 400);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const ambientLight = new THREE.AmbientLight(0x404040, 0.2); 
+scene.add(ambientLight);
+
+const moonLight = new THREE.DirectionalLight(0x556677, 0.3);
+moonLight.position.set(20, 50, -20);
+moonLight.castShadow = true;
+scene.add(moonLight);
+
+// Фары трамвая
+const tramSpotLeft = new THREE.SpotLight(0xfffaaa, 8, 150, 0.5, 0.3, 1);
+const tramSpotRight = new THREE.SpotLight(0xfffaaa, 8, 150, 0.5, 0.3, 1);
+tramSpotLeft.castShadow = true; 
+tramSpotRight.castShadow = true;
+
+/** --- МОДЕЛИ --- **/
+const tramGroup = new THREE.Group();
+const interiorGroup = new THREE.Group();
+
+function selectColor(color, el) {
+    state.tramColor = color;
+    document.querySelectorAll('.color-opt').forEach(d => d.classList.remove('selected'));
+    el.classList.add('selected');
+}
+
+function buildTram() {
+    tramGroup.clear();
+    interiorGroup.clear();
+    
+    // Материалы
+    const bodyColor = new THREE.MeshStandardMaterial({ color: state.tramColor, roughness: 0.4, metalness: 0.3 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.0, transparent: true, opacity: 0.3 });
+    const chromeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, metalness: 0.9 });
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xaa0000, roughness: 0.5 });
+    const seatMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 }); // Кожзам
+    
+    // --- КОРПУС ---
+    // Дно
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.4, 9), darkMat);
+    chassis.position.y = 0.2;
+    tramGroup.add(chassis);
+
+    // Основная оболочка (с вырезом внутри)
+    // Делаем стенки отдельно, чтобы был салон
+    const wallThick = 0.1;
+    const len = 9;
+    const width = 2.8;
+    const height = 2.2;
+    const yBase = 1.5;
+
+    // Левая стена
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, height, len), bodyColor);
+    leftWall.position.set(-width/2 + wallThick/2, yBase, 0);
+    
+    // Правая стена
+    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallThick, height, len), bodyColor);
+    rightWall.position.set(width/2 - wallThick/2, yBase, 0);
+
+    // Задняя стена
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(width, height, wallThick), bodyColor);
+    backWall.position.set(0, yBase, len/2);
+
+    // Передняя кабина (нижняя часть)
+    const frontWall = new THREE.Mesh(new THREE.BoxGeometry(width, 0.8, wallThick), bodyColor);
+    frontWall.position.set(0, 0.8, -len/2);
+
+    // Крыша
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(width, 0.2, len + 0.5), new THREE.MeshStandardMaterial({color: 0xdddddd}));
+    roof.position.y = 2.7;
+
+    tramGroup.add(leftWall, rightWall, backWall, frontWall, roof);
+
+    // Полоса красная
+    const stripeLeft = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 9.1), redMat);
+    stripeLeft.position.set(-1.4, 1.0, 0);
+    const stripeRight = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 9.1), redMat);
+    stripeRight.position.set(1.4, 1.0, 0);
+    tramGroup.add(stripeLeft, stripeRight);
+
+    // Окна (простые плоскости)
+    const winGeo = new THREE.PlaneGeometry(2.8, 1.2);
+    const frontWin = new THREE.Mesh(winGeo, glassMat);
+    frontWin.position.set(0, 1.8, -4.51);
+    frontWin.rotation.y = Math.PI;
+    tramGroup.add(frontWin);
+
+    // --- САЛОН (ИНТЕРЬЕР) ---
+    // Пол
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 8.8), new THREE.MeshStandardMaterial({color: 0x332211}));
+    floor.rotation.x = -Math.PI/2;
+    floor.position.set(0, 0.41, 0);
+    interiorGroup.add(floor);
+
+    // Сиденья (Ряды)
+    for(let z = -2; z < 4; z++) {
+        // Левый ряд (одинарные)
+        const seatL = new THREE.Group();
+        const baseL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.5), seatMat);
+        const backL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.1), seatMat);
+        const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4), chromeMat);
+        backL.position.set(0, 0.35, 0.2);
+        legL.position.set(0, -0.2, 0);
+        seatL.add(baseL, backL, legL);
+        seatL.position.set(-0.8, 0.8, z * 1.5);
+        interiorGroup.add(seatL);
+
+        // Правый ряд (двойные)
+        const seatR = seatL.clone();
+        seatR.scale.set(1.5, 1, 1);
+        seatR.position.set(0.8, 0.8, z * 1.5);
+        interiorGroup.add(seatR);
+    }
+
+    // Поручни
+    const railV = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.2), chromeMat);
+    railV.position.set(0, 1.5, 0);
+    const railH = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 8), chromeMat);
+    railH.rotation.x = Math.PI/2;
+    railH.position.set(0, 2.2, 0);
+    interiorGroup.add(railV, railH);
+
+    // Кабина водителя
+    const cabinPartition = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2, 0.1), darkMat);
+    cabinPartition.position.set(0, 1.4, -3.0);
+    interiorGroup.add(cabinPartition);
+
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 0.6), new THREE.MeshStandardMaterial({color: 0x222}));
+    dash.position.set(0, 1.0, -3.8);
+    interiorGroup.add(dash);
+
+    // Пантограф
+    const panto = new THREE.Group();
+    const pBase = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 1.5), darkMat);
+    const pArm1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), redMat);
+    pArm1.position.set(0, 0.4, 0.5); pArm1.rotation.x = -0.5;
+    const pArm2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), redMat);
+    pArm2.position.set(0, 0.8, -0.2); pArm2.rotation.x = 0.5;
+    panto.add(pBase, pArm1, pArm2);
+    panto.position.set(0, 2.8, -1);
+    tramGroup.add(panto);
+
+    // Свет
+    tramSpotLeft.position.set(-0.8, 0.8, -4.6);
+    tramSpotLeft.target.position.set(-0.8, 0, -20);
+    tramSpotRight.position.set(0.8, 0.8, -4.6);
+    tramSpotRight.target.position.set(0.8, 0, -20);
+    tramGroup.add(tramSpotLeft, tramSpotLeft.target, tramSpotRight, tramSpotRight.target);
+
+    tramGroup.add(interiorGroup);
+    scene.add(tramGroup);
+}
+
+// ДЕТАЛИЗИРОВАННЫЙ ПАУК
+function createDetailedSpider() {
+    const group = new THREE.Group();
+    
+    // Материалы: Блестящий черный хитин, немного текстуры шума (через roughness)
+    const chitinMat = new THREE.MeshStandardMaterial({ 
+        color: 0x111111, 
+        roughness: 0.2, 
+        metalness: 0.6,
+        emissive: 0x050505
+    });
+    const jointMat = new THREE.MeshStandardMaterial({ color: 0x330000, roughness: 0.8 });
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+    // 1. Брюшко (Abdomen)
+    const abdomen = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), chitinMat);
+    abdomen.position.z = 1.5;
+    abdomen.scale.set(1, 0.8, 1.3);
+    group.add(abdomen);
+
+    // 2. Головогрудь (Cephalothorax)
+    const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), chitinMat);
+    thorax.scale.set(1, 0.7, 1);
+    group.add(thorax);
+
+    // 3. Глаза (много)
+    const eyePositions = [
+        [-0.2, 0.3, -0.6], [0.2, 0.3, -0.6],
+        [-0.4, 0.2, -0.5], [0.4, 0.2, -0.5],
+        [-0.1, 0.4, -0.5], [0.1, 0.4, -0.5]
+    ];
+    eyePositions.forEach(pos => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08), eyeMat);
+        eye.position.set(...pos);
+        group.add(eye);
+    });
+
+    // 4. Жвалы (Mandibles)
+    const fangL = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.6, 8), chitinMat);
+    fangL.position.set(-0.25, -0.2, -0.8);
+    fangL.rotation.x = -0.5;
+    
+    const fangR = fangL.clone();
+    fangR.position.set(0.25, -0.2, -0.8);
+    group.add(fangL, fangR);
+
+    // 5. Лапы (Legs) - Сегментированные
+    // IK (Inverse Kinematics) тут не будет, но сделаем красивую статику/анимацию
+    for(let i=0; i<8; i++) {
+        const legGroup = new THREE.Group();
+        const side = i < 4 ? 1 : -1;
+        const index = i % 4; // 0..3 (от переда к заду)
+        
+        // Позиция крепления ноги
+        const attachZ = (index * 0.5) - 0.5;
+        legGroup.position.set(side * 0.4, 0, attachZ);
+
+        // Углы для ног, чтобы они выглядели естественно
+        const baseRotY = (index === 0 ? 0.5 : index === 1 ? 0.2 : index === 2 ? -0.2 : -0.6) * side;
+
+        // Кокса (Coxa) - основание
+        const coxa = new THREE.Mesh(new THREE.SphereGeometry(0.25), jointMat);
+        
+        // Бедро (Femur) - идет вверх
+        const femurGeo = new THREE.CylinderGeometry(0.15, 0.1, 1.5);
+        const femur = new THREE.Mesh(femurGeo, chitinMat);
+        femur.position.y = 0.75; // Половина длины
+        femur.rotation.z = side * -0.5; // Поднимаем вверх
+
+        // Колено (Patella)
+        const patella = new THREE.Mesh(new THREE.SphereGeometry(0.2), jointMat);
+        patella.position.set(side * 0.7, 1.4, 0); // Конец бедра
+
+        // Голень (Tibia) - идет вниз
+        const tibiaGeo = new THREE.CylinderGeometry(0.1, 0.05, 2.0);
+        const tibia = new THREE.Mesh(tibiaGeo, chitinMat);
+        tibia.position.set(side * 1.5, 0.6, 0); 
+        tibia.rotation.z = side * 1.8; // Опускаем вниз
+
+        const fullLeg = new THREE.Group();
+        fullLeg.add(coxa, femur, patella, tibia);
+        
+        // Поворот всей ноги
+        fullLeg.rotation.y = baseRotY;
+        
+        legGroup.add(fullLeg);
+        legGroup.name = 'leg_anchor';
+        // Сохраняем начальный поворот для анимации
+        legGroup.userData = { initialRotX: 0, speedOffset: i * 0.5 };
+        
+        group.add(legGroup);
+    }
+    
+    group.rotation.y = Math.PI;
+    group.scale.set(1.4, 1.4, 1.4);
+    return group;
+}
+
+function createRuinedHouse() {
+    const group = new THREE.Group();
+    const wallMat = new THREE.MeshStandardMaterial({color: 0x151515, roughness: 1.0}); 
+    const w = 6 + Math.random()*4;
+    const h = 8 + Math.random()*6;
+    
+    const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), wallMat);
+    walls.position.y = h/2;
+    group.add(walls);
+
+    // Светящиеся окна
+    for(let i=0; i<4; i++) {
+         if(Math.random()>0.5) continue;
+         const win = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.8), new THREE.MeshBasicMaterial({color: 0x221100}));
+         win.position.set((Math.random()-0.5)*w, 2 + i*3, w/2 + 0.1);
+         group.add(win);
+    }
+    return group;
+}
+
+function createObstacle() {
+    const g = new THREE.Group();
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.5, 1), new THREE.MeshStandardMaterial({color: 0x444444, roughness: 0.9}));
+    mesh.position.y = 0.75;
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3), new THREE.MeshStandardMaterial({color: 0x8B4513}));
+    bar.position.set(0, 1.5, 0);
+    bar.rotation.z = Math.PI/2 + (Math.random()-0.5);
+    g.add(mesh, bar);
+    return g;
+}
+
+/** --- ЛОГИКА МИРА --- **/
+const segments = [];
+const objects = [];
+const enemies = [];
+const watchers = [];
+let extraRail = null;
+
+// Оптимизация материалов окружения
+const railMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.6, metalness: 0.5 });
+const sleepMat = new THREE.MeshStandardMaterial({ color: 0x1a1510, roughness: 1.0 });
+
+function createSegment(zPos) {
+    const segGroup = new THREE.Group();
+    
+    // Земля (темнее и более шероховатая)
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(200, 50),
+        new THREE.MeshStandardMaterial({ color: 0x020202, roughness: 1 })
+    );
+    ground.rotation.x = -Math.PI/2;
+    segGroup.add(ground);
+
+    BASE_CONFIG.LANES.forEach(x => {
+        // Рельсы
+        const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 50), railMat);
+        r1.position.set(x - 0.7, 0.1, 0);
+        const r2 = r1.clone();
+        r2.position.set(x + 0.7, 0.1, 0);
+        
+        // Шпалы (реже для оптимизации, но шире)
+        for(let i=0; i<15; i++) {
+             const sl = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.1, 0.4), sleepMat);
+             sl.position.set(x, 0.05, (i * 3.33) - 25);
+             segGroup.add(sl);
+        }
+        segGroup.add(r1, r2);
+    });
+
+    segGroup.position.z = zPos;
+    scene.add(segGroup);
+    segments.push(segGroup);
+
+    // ДЕРЕВЬЯ И ГЛАЗА
+    for(let i=0; i<35; i++) {
+        const xRaw = (Math.random() - 0.5) * 90; 
+        const zTree = zPos - 25 + Math.random() * 50;
+        
+        if (Math.abs(xRaw) < 6) continue; // Не на путях
+
+        // Простое дерево (цилиндр + конус) для производительности
+        const tree = new THREE.Group();
+        const h = 4 + Math.random()*6;
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, h), new THREE.MeshStandardMaterial({color: 0x0a0500}));
+        trunk.position.y = h/2;
+        const leaves = new THREE.Mesh(new THREE.ConeGeometry(3, 10, 5), new THREE.MeshStandardMaterial({color: 0x030a03, roughness: 1}));
+        leaves.position.y = h + 2;
+        tree.add(trunk, leaves);
+        tree.position.set(xRaw, 0, zTree);
+        scene.add(tree);
+        objects.push({mesh: tree});
+
+        // --- КРАСНЫЕ ГЛАЗА (НАБЛЮДАТЕЛИ) ---
+        // Вероятность выше, чем раньше
+        if(Math.random() < 0.15) {
+            const watcherGroup = new THREE.Group();
+            const eyeGeo = new THREE.SphereGeometry(0.12, 8, 8);
+            // Очень яркий эмиссивный цвет
+            const eyeM = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 2 }); 
+            
+            const e1 = new THREE.Mesh(eyeGeo, eyeM);
+            e1.position.set(-0.2, 0, 0);
+            const e2 = new THREE.Mesh(eyeGeo, eyeM);
+            e2.position.set(0.2, 0, 0);
+            
+            watcherGroup.add(e1, e2);
+            
+            // Глаза прячутся ЗА деревом или сбоку
+            const eyeH = 1 + Math.random() * 3;
+            watcherGroup.position.set(xRaw + (Math.random()-0.5)*1.5, eyeH, zTree + 0.5);
+            
+            // Добавляем случайное моргание через userData
+            watcherGroup.userData = { 
+                blinkTimer: Math.random() * 100, 
+                isBlinking: false 
+            };
+            
+            scene.add(watcherGroup);
+            watchers.push(watcherGroup);
+        }
+    }
+
+    if(Math.random() > 0.7) {
+        const h = createRuinedHouse();
+        const side = Math.random() > 0.5 ? 1 : -1;
+        h.position.set(side * (15 + Math.random()*10), 0, zPos);
+        scene.add(h);
+        objects.push({mesh: h});
+    }
+}
+
+function toggleExtraRail(active, side) {
+    if(active && !extraRail) {
+        state.extraLane = true;
+        state.extraLaneSide = side;
+        const xPos = side === 1 ? 8 : -8; 
+        const g = new THREE.Group();
+        
+        const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.25, 300), new THREE.MeshBasicMaterial({color: 0xcc0000}));
+        r1.position.set(xPos-0.7, 0.2, -100);
+        const r2 = r1.clone();
+        r2.position.set(xPos+0.7, 0.2, -100);
+        g.add(r1, r2);
+        
+        extraRail = g;
+        extraRail.position.z = tramGroup.position.z - 50; 
+        scene.add(extraRail);
+    } else if (!active && extraRail) {
+        state.extraLane = false;
+        scene.remove(extraRail);
+        extraRail = null;
+        if( (state.extraLaneSide === 1 && state.lane === 3) || 
+            (state.extraLaneSide === -1 && state.lane === -1) ) {
+            state.lane = side === 1 ? 2 : 0;
+        }
+    }
+}
+
+/** --- ИГРОВОЙ ЦИКЛ --- **/
+let lastSpawnTime = 0;
+
+function getSpawnDelay() {
+    // Усложнение: чем выше множитель, тем меньше задержка спавна
+    return BASE_CONFIG.SPAWN_DELAY / state.difficultyMultiplier;
+}
+
+function spawnEnemy() {
+    if(state.bossActive || state.isPaused) return;
+    if(performance.now() - lastSpawnTime < getSpawnDelay()) return;
+
+    const spawnType = Math.random();
+    const laneIdx = Math.floor(Math.random() * 3);
+    let xPos = BASE_CONFIG.LANES[laneIdx];
+    
+    // Спавн чуть дальше
+    const zPos = tramGroup.position.z - 130; 
+
+    let entity;
+    let type;
+    if(spawnType < 0.35) { 
+        entity = createObstacle();
+        type = 'block';
+    } else { 
+        entity = createDetailedSpider();
+        type = 'spider';
+    }
+    entity.position.set(xPos, 0, zPos);
+    scene.add(entity);
+    enemies.push({ mesh: entity, type: type });
+    lastSpawnTime = performance.now();
+}
+
+function spawnBoss() {
+    state.bossActive = true;
+    const warningEl = document.getElementById('boss-warning');
+    warningEl.style.display = 'block';
+    vignette.classList.add('darkness');
+
+    const video = document.getElementById('boss-video');
+    video.currentTime = 0;
+    
+    const geometry = new THREE.PlaneGeometry(16, 24); 
+    const texture = new THREE.VideoTexture(video);
+    const material = new THREE.MeshBasicMaterial({ map: texture });
+    const bossMesh = new THREE.Mesh(geometry, material);
+    
+    bossMesh.position.set(0, 8, tramGroup.position.z - 200);
+    scene.add(bossMesh);
+    enemies.push({ mesh: bossMesh, type: 'boss' });
+}
+
+function updateCamera() {
+    if(state.cameraMode === 'FPS') {
+        // Камера внутри кабины
+        const targetPos = tramGroup.position.clone();
+        targetPos.add(new THREE.Vector3(0, 1.6, -3.5)); // Внутри салона, перед стеклом
+        
+        // Плавность меньше для FPS
+        camera.position.lerp(targetPos, 0.2);
+        
+        const lookAtPos = tramGroup.position.clone().add(new THREE.Vector3(0, 0, -20));
+        camera.lookAt(lookAtPos);
+    } else {
+        const camTargetZ = tramGroup.position.z + 14; 
+        const camTargetY = 8; 
+        
+        camera.position.z += (camTargetZ - camera.position.z) * 0.1;
+        camera.position.y += (camTargetY - camera.position.y) * 0.1;
+        
+        const targetX = tramGroup.position.x * 0.8; 
+        camera.position.x += (targetX - camera.position.x) * 0.08;
+
+        camera.lookAt(tramGroup.position.x * 0.3, 0, tramGroup.position.z - 40);
+    }
+}
+
+function increaseDifficulty() {
+    state.difficultyMultiplier += 0.15; // +15% сложности
+    const level = Math.floor((state.difficultyMultiplier - 1) / 0.15) + 1;
+    document.getElementById('level-box').innerText = "УРОВЕНЬ СТРАХА: " + ["I", "II", "III", "IV", "V", "VI", "DEATH"][Math.min(level-1, 6)];
+    
+    // Усиление тумана
+    scene.fog.density = BASE_CONFIG.FOG_DENSITY + (state.difficultyMultiplier * 0.002);
+}
+
+function animate() {
+    state.animationId = requestAnimationFrame(animate);
+
+    if(state.isPaused) return;
+    if(state.screen !== 'GAME') {
+        if(state.screen === 'GAME') renderer.render(scene, camera);
+        return;
+    }
+
+    // Скорость растет со сложностью
+    const currentSpeed = BASE_CONFIG.SPEED * state.difficultyMultiplier;
+    tramGroup.position.z -= currentSpeed;
+    
+    updateCamera();
+
+    let targetX = 0;
+    if(state.lane === -1) targetX = -8;
+    else if(state.lane === 3) targetX = 8;
+    else targetX = BASE_CONFIG.LANES[state.lane];
+
+    tramGroup.position.x += (targetX - tramGroup.position.x) * 0.1;
+    tramGroup.rotation.z = (tramGroup.position.x - targetX) * 0.06;
+    // Тряска трамвая
+    tramGroup.position.y = Math.sin(tramGroup.position.z * 1.5) > 0.9 ? (Math.random()-0.5)*0.05 : 0;
+
+    // --- ОБНОВЛЕНИЕ ГЛАЗ ---
+    const tramPos = tramGroup.position;
+    for(let i = watchers.length - 1; i >= 0; i--) {
+        const w = watchers[i];
+        
+        // Моргание
+        w.userData.blinkTimer--;
+        if(w.userData.blinkTimer <= 0) {
+            w.userData.isBlinking = !w.userData.isBlinking;
+            w.userData.blinkTimer = w.userData.isBlinking ? 5 : 50 + Math.random()*100;
+            w.visible = !w.userData.isBlinking;
+        }
+
+        if(w.position.z > tramPos.z + 20) {
+            scene.remove(w);
+            watchers.splice(i, 1);
+        } else if (Math.abs(w.position.z - tramPos.z) < 150) {
+            w.lookAt(tramPos.x, tramPos.y + 2, tramPos.z);
+        }
+    }
+
+    // --- ВРАГИ ---
+    for(let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        
+        if(e.type === 'spider') {
+            e.mesh.position.z += currentSpeed * 0.6; // Пауки бегут навстречу быстрее
+            
+            // Анимация лап
+            const time = Date.now() * 0.015;
+            e.mesh.children.forEach(group => {
+                if(group.name === 'leg_anchor') {
+                    // Синусная анимация поднятия лап
+                    group.rotation.x = Math.sin(time + group.userData.speedOffset) * 0.5;
+                }
+            });
+            // Покачивание тела
+            e.mesh.position.y = Math.abs(Math.sin(time*2)) * 0.2;
+        }
+
+        if(e.type === 'boss') {
+            const dist = Math.abs(e.mesh.position.z - tramGroup.position.z);
+            
+            // Видео запускаем заранее
+            if(dist < 100 && document.getElementById('boss-video').paused && !state.isPaused) {
+                document.getElementById('boss-video').play().catch(()=>{});
+            }
+            
+            // Проверка столкновения с боссом
+            if(dist < 5) {
+                if(state.lane === -1 || state.lane === 3) { 
+                    // Успешный уворот
+                } else { 
+                    gameOver(); 
+                }
+            }
+            
+            // Босс пройден
+            if(e.mesh.position.z > tramGroup.position.z + 20) {
+                scene.remove(e.mesh);
+                enemies.splice(i, 1);
+                state.bossActive = false;
+                document.getElementById('boss-warning').style.display = 'none';
+                vignette.classList.remove('darkness'); 
+                toggleExtraRail(false);
+                increaseDifficulty(); // УСЛОЖНЕНИЕ
+                continue;
+            }
+        } else {
+            // Обычные препятствия
+            const dx = Math.abs(e.mesh.position.x - tramGroup.position.x);
+            const dz = Math.abs(e.mesh.position.z - tramGroup.position.z);
+            const hitDist = e.type === 'spider' ? 2.5 : 3.0;
+            
+            if(dx < 2.0 && dz < hitDist) {
+                gameOver();
+            }
+            
+            if(e.mesh.position.z > tramGroup.position.z + 20) {
+                scene.remove(e.mesh);
+                enemies.splice(i, 1);
+            }
+        }
+    }
+
+    // Генерация мира
+    const lastSeg = segments[segments.length-1];
+    if(lastSeg.position.z > tramGroup.position.z - 350) createSegment(lastSeg.position.z - 50);
+    
+    if(segments[0].position.z > tramGroup.position.z + 50) {
+        scene.remove(segments[0]);
+        segments.shift();
+    }
+    if(objects.length > 0 && objects[0].mesh.position.z > tramGroup.position.z + 50) {
+        scene.remove(objects[0].mesh);
+        objects.shift();
+    }
+    
+    if(extraRail) extraRail.position.z = tramGroup.position.z - 50;
+
+    spawnEnemy();
+    
+    const prevDist = Math.floor(state.distance);
+    state.distance += currentSpeed * 0.5;
+    const currDist = Math.floor(state.distance);
+    document.getElementById('dist-box').innerText = currDist + " m";
+    
+    const distMod = currDist % BASE_CONFIG.BOSS_MILESTONE;
+    const nextBoss = (Math.floor(currDist / BASE_CONFIG.BOSS_MILESTONE) + 1) * BASE_CONFIG.BOSS_MILESTONE;
+    const distToNextBoss = nextBoss - currDist;
+
+    // Включение доп путей перед боссом
+    if (distToNextBoss <= BASE_CONFIG.RED_RAIL_TRIGGER && !state.bossActive && !extraRail) {
+        const side = Math.random() > 0.5 ? 1 : -1;
+        toggleExtraRail(true, side);
+    }
+
+    // Спавн босса
+    if(currDist > 0 && distMod === 0 && currDist !== prevDist && !state.bossActive) {
+        spawnBoss();
+    }
+
+    renderer.render(scene, camera);
+}
+
+// --- УПРАВЛЕНИЕ ---
+
+function toggleCamera() {
+    state.cameraMode = state.cameraMode === 'TPS' ? 'FPS' : 'TPS';
+    const btn = document.getElementById('cam-btn');
+    btn.style.borderColor = state.cameraMode === 'FPS' ? '#00ff00' : '#880000';
+}
+
+function togglePause() {
+    if(state.screen !== 'GAME' || state.screen === 'OVER') return;
+    
+    if(!state.isPaused) {
+        state.isPaused = true;
+        document.getElementById('pause-screen').classList.add('active');
+        document.getElementById('boss-video').pause();
+        music.pause();
+    } else {
+        resumeGame();
+    }
+}
+
+function resumeGame() {
+    document.getElementById('pause-screen').classList.remove('active');
+    document.getElementById('countdown-screen').classList.add('active');
+    
+    let count = 3;
+    const el = document.getElementById('countdown-text');
+    el.innerText = count;
+    
+    const timer = setInterval(() => {
+        count--;
+        if(count > 0) {
+            el.innerText = count;
+        } else {
+            clearInterval(timer);
+            document.getElementById('countdown-screen').classList.remove('active');
+            state.isPaused = false;
+            music.play();
+        }
+    }, 1000);
+}
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        if(state.screen === 'GAME' && !state.isPaused) togglePause();
+        music.pause();
+    } 
+});
+
+function startGame() {
+    if(state.animationId) cancelAnimationFrame(state.animationId);
+
+    state.screen = 'GAME';
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById('game-ui').style.display = 'flex';
+    
+    music.currentTime = 0;
+    music.play().catch(e => console.log("Audio req click"));
+    vignette.classList.remove('darkness');
+
+    resetWorld();
+    animate();
+}
+
+function resetWorld() {
+    state.lane = 1;
+    state.distance = 0;
+    state.difficultyMultiplier = 1.0;
+    state.bossActive = false;
+    state.extraLane = false;
+    state.isPaused = false;
+    tramGroup.position.set(0,0,0);
+    
+    // Сброс уровня сложности в UI
+    document.getElementById('level-box').innerText = "УРОВЕНЬ СТРАХА: I";
+    scene.fog.density = BASE_CONFIG.FOG_DENSITY;
+
+    enemies.forEach(e => scene.remove(e.mesh));
+    enemies.length = 0;
+    watchers.forEach(w => scene.remove(w));
+    watchers.length = 0;
+    
+    segments.forEach(s => scene.remove(s));
+    segments.length = 0;
+    
+    objects.forEach(o => scene.remove(o.mesh));
+    objects.length = 0;
+    
+    // Перестраиваем трамвай с выбранным цветом
+    buildTram();
+
+    for(let i=0; i<8; i++) createSegment(i * -50);
+}
+
+function gameOver() {
+    state.screen = 'OVER';
+    document.getElementById('blood-overlay').style.opacity = 1;
+    setTimeout(() => { document.getElementById('blood-overlay').style.opacity = 0; }, 2000);
+
+    document.getElementById('game-over').classList.add('active');
+    document.getElementById('game-ui').style.display = 'none';
+    document.getElementById('final-score').innerText = Math.floor(state.distance) + " METERS";
+    document.getElementById('boss-video').pause();
+    music.pause();
+    vignette.classList.remove('darkness');
+}
+
+function resetGame() {
+    document.getElementById('game-over').classList.remove('active');
+    startGame();
+}
+
+function toMenu() {
+    state.screen = 'MENU';
+    document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+    document.getElementById('start-screen').classList.add('active');
+    document.getElementById('game-ui').style.display = 'none';
+    music.pause();
+    music.currentTime = 0;
+    vignette.classList.remove('darkness');
+    if(state.animationId) cancelAnimationFrame(state.animationId);
+}
+
+window.addEventListener('keydown', e => {
+    if(e.code === 'Space') togglePause();
+    if(e.code === 'KeyC') toggleCamera();
+    if(state.screen !== 'GAME' || state.isPaused) return;
+    
+    if(e.key === 'ArrowLeft') {
+        if(state.lane > 0) state.lane--;
+        else if(state.extraLane && state.extraLaneSide === -1) state.lane = -1;
+    }
+    if(e.key === 'ArrowRight') {
+        if(state.lane < 2) state.lane++;
+        else if(state.extraLane && state.extraLaneSide === 1) state.lane = 3;
+    }
+});
+
+let touchStartX = 0;
+window.addEventListener('touchstart', e => touchStartX = e.touches[0].clientX);
+window.addEventListener('touchend', e => {
+    if(state.screen !== 'GAME' || state.isPaused) return;
+    if(e.target.classList.contains('hud-btn') || e.target.classList.contains('color-opt')) return;
+
+    const diff = e.changedTouches[0].clientX - touchStartX;
+    if(Math.abs(diff) > 30) {
+        if(diff > 0) {
+             if(state.lane < 2) state.lane++;
+             else if(state.extraLane && state.extraLaneSide === 1) state.lane = 3;
+        } else {
+             if(state.lane > 0) state.lane--;
+             else if(state.extraLane && state.extraLaneSide === -1) state.lane = -1;
+        }
+    }
+});
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+</script>
+</body>
+</html>
