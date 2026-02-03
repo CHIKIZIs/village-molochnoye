@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tram Nightmare: Drun Update</title>
+    <title>Tram Nightmare: Dark Watchers</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Nosifer&family=Roboto+Mono:wght@400;700&display=swap');
 
@@ -16,7 +16,6 @@
             pointer-events: none; z-index: 5;
             transition: background 2s ease-in-out;
         }
-        /* Класс для усиления тьмы при боссе */
         #vignette.darkness {
             background: radial-gradient(circle, rgba(0,0,0,0.2) 20%, rgba(0,0,0,1) 80%);
         }
@@ -125,9 +124,9 @@
 const CONFIG = {
     LANES: [-3.5, 0, 3.5], 
     SPEED: 0.35,            
-    BOSS_MILESTONE: 1000,    // Босс реже (1000м)
-    RED_RAIL_TRIGGER: 150,   // За сколько метров до босса появляется рельса (мало времени)
-    FOG_DENSITY: 0.025,     
+    BOSS_MILESTONE: 1000,    
+    RED_RAIL_TRIGGER: 150,   
+    FOG_DENSITY: 0.012, // Уменьшена плотность (было 0.025) для лучшей видимости
     SPAWN_DELAY: 1100       
 };
 
@@ -140,7 +139,7 @@ let state = {
     extraLane: false,
     extraLaneSide: 1,
     animationId: null,
-    cameraMode: 'TPS' // 'TPS' or 'FPS'
+    cameraMode: 'TPS'
 };
 
 const music = document.getElementById('bg-music');
@@ -149,9 +148,11 @@ const vignette = document.getElementById('vignette');
 /** --- СЦЕНА --- **/
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x020202);
+// Туман стал слабее
 scene.fog = new THREE.FogExp2(0x020202, CONFIG.FOG_DENSITY);
 
-const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 400);
+// Увеличена дальность прорисовки (500)
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 500);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -168,12 +169,12 @@ moonLight.position.set(10, 40, -10);
 moonLight.castShadow = true;
 scene.add(moonLight);
 
-const tramSpot = new THREE.SpotLight(0xffaa77, 5, 100, 0.6, 0.4, 1);
+const tramSpot = new THREE.SpotLight(0xffaa77, 5, 120, 0.6, 0.4, 1);
 tramSpot.castShadow = true;
 
 /** --- МОДЕЛИ --- **/
 const tramGroup = new THREE.Group();
-const cabinGroup = new THREE.Group(); // Группа интерьера кабины
+const cabinGroup = new THREE.Group();
 
 function buildTram() {
     tramGroup.clear();
@@ -185,8 +186,7 @@ function buildTram() {
     const redMat = new THREE.MeshStandardMaterial({ color: 0xCC0000, roughness: 0.5 }); 
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
     const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.8 });
-    const rustyMetal = new THREE.MeshStandardMaterial({ color: 0x554444, roughness: 0.4, metalness: 0.6 });
-
+    
     // --- КОРПУС ТРАМВАЯ ---
     const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.6, 8.5), darkMat);
     chassis.position.y = 0.3;
@@ -204,7 +204,6 @@ function buildTram() {
     stripe.position.y = 1.35;
     tramGroup.add(stripe);
 
-    // Окна
     const glassMat = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.1, transparent: true, opacity: 0.7});
     const cabinGlass = new THREE.Mesh(new THREE.BoxGeometry(2.7, 1.0, 8.0), glassMat);
     cabinGlass.position.y = 2.0;
@@ -214,13 +213,11 @@ function buildTram() {
     roof.position.y = 2.7;
     tramGroup.add(roof);
 
-    // Фары
     tramSpot.position.set(0, 2.5, -3.8);
     tramSpot.target.position.set(0, 0, -30);
     tramGroup.add(tramSpot);
     tramGroup.add(tramSpot.target);
 
-    // Пантограф
     const pantoBase = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.2, 1.5), darkMat);
     pantoBase.position.set(0, 2.8, 0);
     const pBar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2), darkMat);
@@ -228,19 +225,16 @@ function buildTram() {
     pBar.rotation.z = Math.PI/4;
     tramGroup.add(pantoBase, pBar);
 
-    // --- ИНТЕРЬЕР КАБИНЫ (для вида из глаз) ---
-    // Панель управления (слева)
+    // ИНТЕРЬЕР
     const dashBox = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.6), new THREE.MeshStandardMaterial({color: 0x1a1a1a}));
     dashBox.position.set(-0.7, 1.2, -3.6);
     cabinGroup.add(dashBox);
 
-    // Ручка контроллера
     const controller = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4), new THREE.MeshStandardMaterial({color: 0x111}));
     controller.rotation.x = 0.5;
     controller.position.set(-0.7, 1.7, -3.6);
     cabinGroup.add(controller);
 
-    // Тормозное колесо (справа, красное, как на фото)
     const wheelStand = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 0.8), darkMat);
     wheelStand.position.set(0.7, 1.0, -3.5);
     cabinGroup.add(wheelStand);
@@ -248,12 +242,8 @@ function buildTram() {
     const wheelTorus = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.04, 8, 16), new THREE.MeshStandardMaterial({color: 0xaa0000}));
     wheelTorus.position.set(0.7, 1.5, -3.5);
     wheelTorus.rotation.x = Math.PI/2 - 0.4;
-    const wheelSpoke = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7), new THREE.MeshStandardMaterial({color: 0xaa0000}));
-    wheelSpoke.position.set(0.7, 1.5, -3.5);
-    wheelSpoke.rotation.x = Math.PI/2 - 0.4;
-    cabinGroup.add(wheelTorus, wheelSpoke);
+    cabinGroup.add(wheelTorus);
 
-    // Пол кабины
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(3, 2), woodMat);
     floor.rotation.x = -Math.PI/2;
     floor.position.set(0, 0.5, -3.5);
@@ -263,47 +253,47 @@ function buildTram() {
     scene.add(tramGroup);
 }
 
-// ПАУК (Улучшенный)
+// ПАУК (МАССИВНЫЙ)
 function createMeatySpider() {
     const group = new THREE.Group();
     const blackChitin = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.3, metalness: 0.4 });
     
-    // Тело
-    const abdomen = new THREE.Mesh(new THREE.SphereGeometry(1.4, 12, 12), blackChitin);
-    abdomen.position.z = 1.2;
-    abdomen.scale.set(1, 0.8, 1.2);
+    // Тело - теперь более жирное и округлое
+    const abdomen = new THREE.Mesh(new THREE.SphereGeometry(1.5, 12, 12), blackChitin);
+    abdomen.position.z = 1.4;
+    abdomen.scale.set(1.1, 0.9, 1.3);
     
-    const thorax = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 10), blackChitin);
-    thorax.position.z = -0.2;
+    const thorax = new THREE.Mesh(new THREE.SphereGeometry(1.0, 10, 10), blackChitin);
+    thorax.position.z = -0.3;
     
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), blackChitin);
-    head.position.z = -1.0;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 8), blackChitin);
+    head.position.z = -1.2;
 
     group.add(abdomen, thorax, head);
 
     // Глаза
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    [[-0.2,-0.9], [0.2,-0.9], [-0.4,-0.8], [0.4,-0.8]].forEach(pos => {
-        const e = new THREE.Mesh(new THREE.SphereGeometry(0.1), eyeMat);
-        e.position.set(pos[0], 0.3, pos[1]);
+    [[-0.25,-1.1], [0.25,-1.1], [-0.5,-1.0], [0.5,-1.0]].forEach(pos => {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(0.12), eyeMat);
+        e.position.set(pos[0], 0.4, pos[1]);
         group.add(e);
     });
 
-    // Ноги (с суставами)
+    // Ноги (МАССИВНЫЕ)
     for(let i=0; i<8; i++) {
         const legGroup = new THREE.Group();
         const side = i < 4 ? 1 : -1;
-        const zOffset = ((i % 4) * 0.6) - 0.5;
+        const zOffset = ((i % 4) * 0.7) - 0.8;
 
-        // Бедро
-        const femur = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 1.5), blackChitin);
-        femur.position.set(side * 0.7, 0.5, 0);
-        femur.rotation.z = side * -0.8;
+        // Бедро (толще)
+        const femur = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 1.8), blackChitin);
+        femur.position.set(side * 0.8, 0.6, 0);
+        femur.rotation.z = side * -0.6;
         
-        // Голень
-        const tibia = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.0), blackChitin);
-        tibia.position.set(side * 1.8, -0.2, 0);
-        tibia.rotation.z = side * 1.2;
+        // Голень (толще)
+        const tibia = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 2.4), blackChitin);
+        tibia.position.set(side * 2.0, -0.4, 0);
+        tibia.rotation.z = side * 1.0;
 
         legGroup.add(femur, tibia);
         legGroup.position.set(0, 0, zOffset);
@@ -311,39 +301,35 @@ function createMeatySpider() {
         group.add(legGroup);
     }
     
-    group.scale.set(1.1, 1.1, 1.1);
-    group.rotation.y = Math.PI; // Лицом к трамваю
+    // Общий масштаб монстра увеличен
+    group.scale.set(1.6, 1.6, 1.6);
+    group.rotation.y = Math.PI; 
     return group;
 }
 
-// РАЗРУШЕННЫЕ ДОМА
 function createRuinedHouse() {
     const group = new THREE.Group();
-    const wallMat = new THREE.MeshStandardMaterial({color: 0x151515, roughness: 1.0}); // Темные стены
+    const wallMat = new THREE.MeshStandardMaterial({color: 0x151515, roughness: 1.0}); 
     const webMat = new THREE.MeshBasicMaterial({color: 0xaaaaaa, wireframe: true, transparent: true, opacity: 0.3});
 
     const w = 7 + Math.random()*3;
     const h = 10 + Math.random()*8;
     
-    // Основной блок (разрушенный)
     const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), wallMat);
     walls.position.y = h/2;
-    walls.rotation.y = (Math.random() - 0.5) * 0.2; // Криво стоит
+    walls.rotation.y = (Math.random() - 0.5) * 0.2; 
     group.add(walls);
 
-    // "Паутина" - вайрфрейм сфера поверх дома
     const web = new THREE.Mesh(new THREE.IcosahedronGeometry(w/1.5, 1), webMat);
     web.position.y = h/2;
     web.scale.set(1, 1.5, 1);
     group.add(web);
 
-    // Окна без света (просто дыры)
     for(let i=0; i<3; i++) {
          const win = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.0), new THREE.MeshBasicMaterial({color: 0x000000}));
          win.position.set(0, 3 + i*4, w/2 + 0.1);
-         if(Math.random() > 0.3) group.add(win); // Не все окна целы
+         if(Math.random() > 0.3) group.add(win); 
     }
-
     return group;
 }
 
@@ -362,8 +348,14 @@ function createObstacle() {
 const segments = [];
 const objects = [];
 const enemies = [];
-const runningSpiders = []; // Пауки на фоне
+const runningSpiders = []; 
+const watchers = []; // Массив для глаз в лесу
 let extraRail = null;
+
+// Материалы для рельс (переиспользуем для производительности)
+const railMetalMat = new THREE.MeshStandardMaterial({ color: 0x888899, roughness: 0.4, metalness: 0.8 });
+const sleeperMat = new THREE.MeshStandardMaterial({ color: 0x2a1d15, roughness: 0.9 });
+const ballastMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 1 }); // Темный гравий
 
 function createSegment(zPos) {
     const segGroup = new THREE.Group();
@@ -376,17 +368,30 @@ function createSegment(zPos) {
     ground.rotation.x = -Math.PI/2;
     segGroup.add(ground);
 
-    // Рельсы
+    // --- РЕАЛИСТИЧНЫЕ РЕЛЬСЫ ---
     CONFIG.LANES.forEach(x => {
-        for(let i=0; i<10; i++) {
-            const s = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 0.6), new THREE.MeshStandardMaterial({color: 0x0f0a05}));
-            s.position.set(x, 0.05, (i*5) - 25);
-            segGroup.add(s);
+        // Насыпь (балласт)
+        const ballast = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.2, 50), ballastMat);
+        ballast.position.set(x, 0.05, 0);
+        segGroup.add(ballast);
+
+        // Шпалы (более частые и похожие на дерево)
+        for(let i=0; i<30; i++) {
+            const sleeper = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.15, 0.4), sleeperMat);
+            // Немного случайный сдвиг для реализма
+            const jiggle = (Math.random() - 0.5) * 0.05;
+            sleeper.position.set(x, 0.15, (i * 1.66) - 25 + jiggle);
+            sleeper.rotation.y = jiggle * 2;
+            segGroup.add(sleeper);
         }
-        const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 50), new THREE.MeshStandardMaterial({color: 0x444}));
-        r1.position.set(x - 0.7, 0.12, 0);
+
+        // Сами рельсы (тонкие, металлические, приподнятые)
+        const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.25, 50), railMetalMat);
+        r1.position.set(x - 0.71, 0.3, 0); // Стандартная колея
+        
         const r2 = r1.clone();
-        r2.position.set(x + 0.7, 0.12, 0);
+        r2.position.set(x + 0.71, 0.3, 0);
+        
         segGroup.add(r1, r2);
     });
 
@@ -394,15 +399,14 @@ function createSegment(zPos) {
     scene.add(segGroup);
     segments.push(segGroup);
 
-    // ДЕРЕВЬЯ ВЕЗДЕ (Густой лес)
-    // Генерируем много деревьев, но проверяем, чтобы не на рельсах
+    // ДЕРЕВЬЯ И ГЛАЗА
     for(let i=0; i<30; i++) {
-        const xRaw = (Math.random() - 0.5) * 80; // Широкий разброс
+        const xRaw = (Math.random() - 0.5) * 80; 
         const zTree = zPos - 25 + Math.random() * 50;
         
-        // Пропускаем зону рельс (от -5 до 5)
         if (Math.abs(xRaw) < 5.5) continue;
 
+        // Дерево
         const tree = new THREE.Group();
         const h = 3 + Math.random()*4;
         const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, h), new THREE.MeshStandardMaterial({color: 0x110d00}));
@@ -413,9 +417,32 @@ function createSegment(zPos) {
         tree.position.set(xRaw, 0, zTree);
         scene.add(tree);
         objects.push({mesh: tree});
+
+        // --- КРАСНЫЕ ГЛАЗА (НАБЛЮДАТЕЛИ) ---
+        // Шанс 10% на дерево, что там кто-то смотрит
+        if(Math.random() < 0.1) {
+            const watcherGroup = new THREE.Group();
+            const eyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
+            // Светящийся материал
+            const eyeM = new THREE.MeshBasicMaterial({ color: 0xff0000 }); 
+            
+            const e1 = new THREE.Mesh(eyeGeo, eyeM);
+            e1.position.set(-0.15, 0, 0);
+            const e2 = new THREE.Mesh(eyeGeo, eyeM);
+            e2.position.set(0.15, 0, 0);
+            
+            watcherGroup.add(e1, e2);
+            
+            // Высота глаз (в кустах или высоко на дереве)
+            const eyeH = 1 + Math.random() * 4;
+            // Позиция чуть сбоку от дерева
+            watcherGroup.position.set(xRaw + (Math.random()-0.5), eyeH, zTree + (Math.random()-0.5));
+            
+            scene.add(watcherGroup);
+            watchers.push(watcherGroup);
+        }
     }
 
-    // Разрушенные дома (реже)
     if(Math.random() > 0.6) {
         const h = createRuinedHouse();
         const side = Math.random() > 0.5 ? 1 : -1;
@@ -429,23 +456,30 @@ function toggleExtraRail(active, side) {
     if(active && !extraRail) {
         state.extraLane = true;
         state.extraLaneSide = side;
-        const xPos = side === 1 ? 8 : -8; // Далеко сбоку
+        const xPos = side === 1 ? 8 : -8; 
         const g = new THREE.Group();
+        
         // Красные шпалы
-        const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 300), new THREE.MeshBasicMaterial({color: 0xff0000}));
-        r1.position.set(xPos-0.7, 0.1, -100);
+        const r1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.25, 300), new THREE.MeshBasicMaterial({color: 0xff0000}));
+        r1.position.set(xPos-0.7, 0.2, -100);
         const r2 = r1.clone();
-        r2.position.set(xPos+0.7, 0.1, -100);
+        r2.position.set(xPos+0.7, 0.2, -100);
+        
+        // И редкие шпалы для призрачного пути
+        for(let k=0; k<100; k++) {
+             const sl = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.1, 0.3), new THREE.MeshBasicMaterial({color: 0x550000}));
+             sl.position.set(xPos, 0.1, -250 + k*3);
+             g.add(sl);
+        }
+
         g.add(r1, r2);
         extraRail = g;
-        // Появляется недалеко от игрока
         extraRail.position.z = tramGroup.position.z - 50; 
         scene.add(extraRail);
     } else if (!active && extraRail) {
         state.extraLane = false;
         scene.remove(extraRail);
         extraRail = null;
-        // Возврат на обычную линию, если были на красной
         if( (state.extraLaneSide === 1 && state.lane === 3) || 
             (state.extraLaneSide === -1 && state.lane === -1) ) {
             state.lane = side === 1 ? 2 : 0;
@@ -463,11 +497,6 @@ function spawnEnemy() {
     const spawnType = Math.random();
     const laneIdx = Math.floor(Math.random() * 3);
     let xPos = CONFIG.LANES[laneIdx];
-    
-    // ВАЖНО: Если активна красная рельса, НЕ спавним на ней препятствия
-    // Красная рельса это lane -1 (-8) или 3 (8). Обычные Lanes: -3.5, 0, 3.5.
-    // Функция спавна работает по обычным линиям, так что здесь безопасно.
-    // Но добавим проверку на всякий случай, если логика расширится.
     
     const zPos = tramGroup.position.z - 120; 
 
@@ -487,18 +516,16 @@ function spawnEnemy() {
 }
 
 function spawnRunnerSpider() {
-    // Паук перебегает дорогу вдалеке
     if(Math.random() > 0.02) return;
     
     const s = createMeatySpider();
-    s.scale.set(0.8, 0.8, 0.8);
-    // Стартует сбоку
+    s.scale.set(1.2, 1.2, 1.2); // Фоновые тоже большие
     const side = Math.random() > 0.5 ? 1 : -1;
-    const startX = side * 30;
+    const startX = side * 40; // Стартуют дальше
     const zPos = tramGroup.position.z - (100 + Math.random()*50);
     
     s.position.set(startX, 0, zPos);
-    s.userData = { vx: -side * 0.4 }; // Скорость по X
+    s.userData = { vx: -side * 0.4 }; 
     scene.add(s);
     runningSpiders.push(s);
 }
@@ -507,13 +534,11 @@ function spawnBoss() {
     state.bossActive = true;
     const warningEl = document.getElementById('boss-warning');
     warningEl.style.display = 'block';
-    
-    // Включаем эффект тьмы
     vignette.classList.add('darkness');
 
     const video = document.getElementById('boss-video');
     video.currentTime = 0;
-    const geometry = new THREE.PlaneGeometry(14, 20); // Большой экран
+    const geometry = new THREE.PlaneGeometry(14, 20); 
     const texture = new THREE.VideoTexture(video);
     const material = new THREE.MeshBasicMaterial({ map: texture });
     const bossMesh = new THREE.Mesh(geometry, material);
@@ -525,34 +550,21 @@ function spawnBoss() {
 
 function updateCamera() {
     if(state.cameraMode === 'FPS') {
-        // ВИД ИЗ КАБИНЫ
-        // Камера жестко привязана к голове водителя внутри трамвая
         const targetPos = tramGroup.position.clone();
-        targetPos.add(new THREE.Vector3(0, 2.7, -3.2)); // Внутри кабины
+        targetPos.add(new THREE.Vector3(0, 2.7, -3.2)); 
         camera.position.copy(targetPos);
-        
-        // Смотрим немного вниз на дорогу
         const lookAtPos = tramGroup.position.clone().add(new THREE.Vector3(0, 0, -20));
         camera.lookAt(lookAtPos);
-        
-        // Скрываем интерьер частично? Нет, мы внутри него, он должен быть виден.
-        // Ближняя плоскость отсечения (0.1) позволяет видеть руль.
     } else {
-        // ВИД СВЕРХУ-СБОКУ (Динамический)
-        const camTargetZ = tramGroup.position.z + 12; // Позади
-        const camTargetY = 10; // Высоко
+        const camTargetZ = tramGroup.position.z + 12; 
+        const camTargetY = 10; 
         
-        // Плавное следование по Z
         camera.position.z += (camTargetZ - camera.position.z) * 0.1;
         camera.position.y += (camTargetY - camera.position.y) * 0.1;
         
-        // Смещение по X (чтобы видеть бок при повороте)
-        // Если трамвай едет прямо (x=0), камера на x=0. 
-        // Если трамвай сбоку, камера отстает, создавая угол.
         const targetX = tramGroup.position.x * 0.6; 
         camera.position.x += (targetX - camera.position.x) * 0.08;
 
-        // Камера смотрит в точку ДАЛЕКО перед трамваем
         camera.lookAt(tramGroup.position.x * 0.3, 0, tramGroup.position.z - 30);
     }
 }
@@ -566,29 +578,38 @@ function animate() {
         return;
     }
 
-    // Движение трамвая
     tramGroup.position.z -= CONFIG.SPEED;
-    
-    // Камера
     updateCamera();
 
-    // Логика перестроения
     let targetX = 0;
     if(state.lane === -1) targetX = -8;
     else if(state.lane === 3) targetX = 8;
     else targetX = CONFIG.LANES[state.lane];
 
     tramGroup.position.x += (targetX - tramGroup.position.x) * 0.1;
-    // Наклон корпуса при повороте
     tramGroup.rotation.z = (tramGroup.position.x - targetX) * 0.05;
-    // Тряска
     tramGroup.position.y = Math.sin(tramGroup.position.z * 1.5) > 0.9 ? (Math.random()-0.5)*0.04 : 0;
+
+    // ОБНОВЛЕНИЕ ГЛАЗ (СЛЕЖКА)
+    // Оптимизация: обновляем только глаза в радиусе 100 метров
+    const tramPos = tramGroup.position;
+    for(let i = watchers.length - 1; i >= 0; i--) {
+        const w = watchers[i];
+        if(w.position.z > tramPos.z + 20) {
+            // Удаляем глаза, которые остались позади
+            scene.remove(w);
+            watchers.splice(i, 1);
+        } else if (Math.abs(w.position.z - tramPos.z) < 150) {
+            // Глаза поворачиваются к трамваю
+            w.lookAt(tramPos.x, tramPos.y + 2, tramPos.z);
+        }
+    }
 
     // Враги
     for(let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
         if(e.type === 'spider') {
-            e.mesh.position.z += CONFIG.SPEED * 0.5; // Пауки бегут навстречу
+            e.mesh.position.z += CONFIG.SPEED * 0.5; 
             e.mesh.children.forEach(c => {
                 if(c.name === 'leg') c.rotation.x = Math.sin(Date.now() * 0.02 + c.position.z) * 0.8;
             });
@@ -600,7 +621,7 @@ function animate() {
                 document.getElementById('boss-video').play().catch(()=>{});
             }
             if(dist < 5) {
-                if(state.lane === -1 || state.lane === 3) { /* Жив */ } 
+                if(state.lane === -1 || state.lane === 3) {  } 
                 else { gameOver(); }
             }
             if(e.mesh.position.z > tramGroup.position.z + 20) {
@@ -608,14 +629,16 @@ function animate() {
                 enemies.splice(i, 1);
                 state.bossActive = false;
                 document.getElementById('boss-warning').style.display = 'none';
-                vignette.classList.remove('darkness'); // Убираем тьму
+                vignette.classList.remove('darkness'); 
                 toggleExtraRail(false);
                 continue;
             }
         } else {
             const dx = Math.abs(e.mesh.position.x - tramGroup.position.x);
             const dz = Math.abs(e.mesh.position.z - tramGroup.position.z);
-            if(dx < 1.8 && dz < 3.0) gameOver();
+            // Из-за увеличения размеров пауков, чуть увеличим хитбокс
+            const hitDist = e.type === 'spider' ? 2.5 : 3.0;
+            if(dx < 2.0 && dz < hitDist) gameOver();
             if(e.mesh.position.z > tramGroup.position.z + 20) {
                 scene.remove(e.mesh);
                 enemies.splice(i, 1);
@@ -623,13 +646,12 @@ function animate() {
         }
     }
 
-    // Бегающие фоновые пауки
     spawnRunnerSpider();
     for(let i = runningSpiders.length - 1; i >= 0; i--) {
         const s = runningSpiders[i];
         s.position.x += s.userData.vx;
         s.children.forEach(c => { if(c.name === 'leg') c.rotation.x = Math.sin(Date.now() * 0.03) * 1.0; });
-        if(Math.abs(s.position.x) > 50 || s.position.z > tramGroup.position.z + 20) {
+        if(Math.abs(s.position.x) > 60 || s.position.z > tramGroup.position.z + 20) {
             scene.remove(s);
             runningSpiders.splice(i, 1);
         }
@@ -637,40 +659,34 @@ function animate() {
 
     // Генерация мира
     const lastSeg = segments[segments.length-1];
-    if(lastSeg.position.z > tramGroup.position.z - 250) createSegment(lastSeg.position.z - 50);
+    if(lastSeg.position.z > tramGroup.position.z - 300) createSegment(lastSeg.position.z - 50); // Генерируем заранее (было 250)
     if(segments[0].position.z > tramGroup.position.z + 50) {
         scene.remove(segments[0]);
         segments.shift();
     }
-    // Удаление старых объектов (деревьев, домов)
     if(objects.length > 0 && objects[0].mesh.position.z > tramGroup.position.z + 50) {
         scene.remove(objects[0].mesh);
         objects.shift();
     }
     
-    // Красная рельса движется вместе с миром (логически она стоит, но мы генерируем её)
     if(extraRail) extraRail.position.z = tramGroup.position.z - 50;
 
     spawnEnemy();
     
-    // Дистанция и События
     const prevDist = Math.floor(state.distance);
     state.distance += CONFIG.SPEED * 0.5;
     const currDist = Math.floor(state.distance);
     document.getElementById('dist-box').innerText = currDist + " m";
     
-    // Логика спавна Босса и Рельсы
     const distMod = currDist % CONFIG.BOSS_MILESTONE;
     const nextBoss = (Math.floor(currDist / CONFIG.BOSS_MILESTONE) + 1) * CONFIG.BOSS_MILESTONE;
     const distToNextBoss = nextBoss - currDist;
 
-    // 1. Появление красной рельсы (за 150м до босса)
     if (distToNextBoss <= CONFIG.RED_RAIL_TRIGGER && !state.bossActive && !extraRail) {
         const side = Math.random() > 0.5 ? 1 : -1;
         toggleExtraRail(true, side);
     }
 
-    // 2. Появление Босса
     if(currDist > 0 && distMod === 0 && currDist !== prevDist && !state.bossActive) {
         spawnBoss();
     }
@@ -682,7 +698,6 @@ function animate() {
 
 function toggleCamera() {
     state.cameraMode = state.cameraMode === 'TPS' ? 'FPS' : 'TPS';
-    // Кнопка меняет цвет
     const btn = document.getElementById('cam-btn');
     btn.style.borderColor = state.cameraMode === 'FPS' ? '#00ff00' : '#880000';
 }
@@ -755,6 +770,8 @@ function resetWorld() {
     enemies.length = 0;
     runningSpiders.forEach(s => scene.remove(s));
     runningSpiders.length = 0;
+    watchers.forEach(w => scene.remove(w));
+    watchers.length = 0;
     
     segments.forEach(s => scene.remove(s));
     segments.length = 0;
@@ -810,7 +827,6 @@ let touchStartX = 0;
 window.addEventListener('touchstart', e => touchStartX = e.touches[0].clientX);
 window.addEventListener('touchend', e => {
     if(state.screen !== 'GAME' || state.isPaused) return;
-    // Игнорируем нажатия на кнопки UI
     if(e.target.classList.contains('hud-btn')) return;
 
     const diff = e.changedTouches[0].clientX - touchStartX;
